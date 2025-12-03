@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>OODaiP聊天室 - 登录</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+    <script src="/static/js/jquery-3.7.1.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#1677FF',
+                    }
+                }
+            }
+        };
+    </script>
+</head>
+<body class="bg-gray-100 h-screen flex items-center justify-center font-sans">
+
+<div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all">
+    <div class="bg-primary p-6 text-center">
+        <i class="fas fa-comments text-4xl text-white mb-3"></i>
+        <h2 class="text-white text-2xl font-bold">OODaiP聊天室</h2>
+        <p class="text-white/80 mt-1">连接同事，畅聊工作</p>
+    </div>
+    <div class="p-6">
+        <div class="mb-4">
+            <label class="block text-gray-700 text-sm font-bold mb-2" for="login-username">
+                昵称
+            </label>
+            <input class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="login-username" type="text" placeholder="请输入您的昵称">
+        </div>
+        <div class="mb-4">
+            <label class="block text-gray-700 text-sm font-bold mb-2" for="login-password">
+                密码
+            </label>
+            <input class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="login-password" type="password" placeholder="请输入密码 (123456)">
+        </div>
+        <div class="mb-6">
+            <label class="block text-gray-700 text-sm font-bold mb-2" for="server-select">
+                选择服务器
+            </label>
+            <select class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="server-select">
+                <option value="">正在加载服务器列表...</option>
+            </select>
+        </div>
+        <div class="flex items-center justify-between">
+            <button class="bg-primary hover:bg-primary/90 text-white font-bold py-3 px-8 rounded-lg focus:outline-none focus:shadow-outline transition-colors w-full" id="login-btn">
+                登录
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    $(document).ready(function() {
+        // Load config
+        $.getJSON('/api/config', function(data) {
+            var $select = $('#server-select');
+            $select.empty();
+            if (data.servers && data.servers.length > 0) {
+                data.servers.forEach(function(server) {
+                    $select.append($('<option>', {
+                        value: server.url,
+                        text: server.name
+                    }));
+                });
+            } else {
+                $select.append($('<option>', {
+                    value: '',
+                    text: '无可用服务器'
+                }));
+            }
+        });
+
+        function doLogin() {
+            var username = $('#login-username').val().trim();
+            var password = $('#login-password').val().trim();
+            var serverUrl = $('#server-select').val();
+
+            if (!username) {
+                alert('请输入昵称');
+                return;
+            }
+            if (password !== '123456') {
+                alert('密码错误，固定密码为 123456');
+                return;
+            }
+            if (!serverUrl) {
+                alert('请选择服务器地址');
+                return;
+            }
+
+            // Disable button
+            var $btn = $('#login-btn');
+            var originalText = $btn.text();
+            $btn.prop('disabled', true).text('登录中...');
+
+            // Check nickname availability on the selected server
+            // Note: This assumes the server has the /api/check_nickname endpoint
+            // If serverUrl is different from current origin, CORS might be an issue.
+            // For this local setup, it's likely fine.
+            var checkUrl = serverUrl + '/api/check_nickname?nickname=' + encodeURIComponent(username);
+
+            $.ajax({
+                url: checkUrl,
+                method: 'GET',
+                success: function(response) {
+                    if (response.available) {
+                        // Save server URL to localStorage for chat page
+                        localStorage.setItem('chat_server_url', serverUrl);
+                        window.location.href = '/chat?nickname=' + encodeURIComponent(username);
+                    } else {
+                        alert('名称重复，请重新输入');
+                        $btn.prop('disabled', false).text(originalText);
+                    }
+                },
+                error: function() {
+                    // If check fails (e.g., network error or endpoint missing), warn user but maybe allow proceed?
+                    // Or assume server is down.
+                    // For now, let's alert error.
+                    alert('无法连接到服务器验证昵称，请稍后重试或检查服务器状态。');
+                    $btn.prop('disabled', false).text(originalText);
+                }
+            });
+        }
+
+        $('#login-btn').click(doLogin);
+        $('#login-username, #login-password').keypress(function(e) {
+            if (e.which == 13) doLogin();
+        });
+    });
+</script>
+</body>
+</html>

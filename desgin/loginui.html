@@ -1,0 +1,844 @@
+<html lang="zh-CN">
+ <head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>
+   局域网聊天室
+  </title>
+  <script src="https://res.gemcoder.com/js/reload.js">
+  </script>
+  <script src="https://cdn.tailwindcss.com">
+  </script>
+  <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+  
+  <!-- jQuery 预留加载位：请将 jquery-3.7.1.min.js 拷贝到 /static/js/ 下 -->
+  <script src="/static/js/jquery-3.7.1.min.js"></script>
+  
+  <script>
+   tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        primary: '#1677FF',
+        secondary: '#0F172A',
+        accent: '#36BFFA',
+        success: '#00B42A',
+        warning: '#FF7D00',
+        danger: '#F53F3F',
+        info: '#86909C',
+        light: '#F2F3F5',
+        dark: '#1D2129',
+        'chat-bg': '#E5E9F2',
+        'chat-bubble-left': '#FFFFFF',
+        'chat-bubble-right': '#95EC69'
+      },
+      fontFamily: {
+        inter: ['Inter', 'sans-serif']
+      },
+      spacing: {
+        '5.5': '1.375rem',
+        '18': '4.5rem'
+      }
+    }
+  }
+};
+  </script>
+  <style type="text/tailwindcss">
+   @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .scrollbar-hide {
+                -ms-overflow-style: none;
+                scrollbar-width: none;
+            }
+            .scrollbar-hide::-webkit-scrollbar {
+                display: none;
+            }
+            .chat-shadow {
+                box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            }
+            .message-appear {
+                animation: messageAppear 0.3s ease-out forwards;
+            }
+            @keyframes messageAppear {
+                from {
+                    opacity: 0;
+                    transform: translateY(10px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+            .typing-indicator span {
+                height: 8px;
+                width: 8px;
+                margin: 0 1px;
+                background-color: #999;
+                border-radius: 50%;
+                display: inline-block;
+                animation: typing 1.4s infinite ease-in-out both;
+            }
+            .typing-indicator span:nth-child(1) {
+                animation-delay: 0s;
+            }
+            .typing-indicator span:nth-child(2) {
+                animation-delay: 0.2s;
+            }
+            .typing-indicator span:nth-child(3) {
+                animation-delay: 0.4s;
+            }
+            @keyframes typing {
+                0% {
+                    transform: scale(0);
+                }
+                40% {
+                    transform: scale(1);
+                }
+                80% {
+                    transform: scale(0);
+                }
+                100% {
+                    transform: scale(0);
+                }
+            }
+        }
+  </style>
+ </head>
+ <body class="font-inter bg-gray-100 h-screen flex flex-col overflow-hidden text-dark">
+  <!-- [MODULE] a1b_应用容器 -->
+  <div class="flex flex-col h-full max-w-7xl mx-auto bg-white shadow-lg overflow-hidden">
+   <!-- [MODULE] c2d_顶部导航栏 -->
+   <header class="bg-primary text-white py-3 px-4 flex items-center justify-between shadow-md z-10">
+    <div class="flex items-center space-x-3">
+     <i class="fas fa-comments text-2xl">
+     </i>
+     <h1 class="text-xl font-bold">
+      局域网聊天室
+     </h1>
+    </div>
+    <div class="flex items-center space-x-4">
+     <button class="p-2 rounded-full hover:bg-primary/80 transition-colors" id="settings-btn">
+      <i class="fas fa-cog">
+      </i>
+     </button>
+     <button class="flex items-center space-x-2 p-1 rounded-full hover:bg-primary/80 transition-colors" id="user-info-btn">
+      <img alt="用户头像" class="w-8 h-8 rounded-full object-cover border-2 border-white" src="./api/searchImage?query=user avatar with blue background, simple icon style&amp;width=32&amp;height=32"/>
+      <span class="hidden md:inline-block font-medium" id="current-username">
+       我
+      </span>
+     </button>
+    </div>
+   </header>
+   <!-- [/MODULE] c2d_顶部导航栏 -- 包含应用标题、设置按钮和用户信息按钮 -->
+   <!-- [MODULE] e3f_主内容区域 -->
+   <main class="flex flex-1 overflow-hidden">
+    <!-- [MODULE] g4h_联系人列表区域 -->
+    <aside class="w-64 bg-white border-r border-gray-200 flex flex-col hidden md:flex" id="contact-panel">
+     <!-- [MODULE] i5j_联系人搜索 -->
+     <div class="p-3 border-b border-gray-200">
+      <div class="relative">
+       <input class="w-full py-2 pl-10 pr-4 rounded-full bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all" placeholder="搜索联系人..." type="text"/>
+       <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+       </i>
+      </div>
+     </div>
+     <!-- [/MODULE] i5j_联系人搜索 -- 提供搜索联系人功能 -->
+     <!-- [MODULE] k6l_联系人分类标签 -->
+     <div class="flex border-b border-gray-200">
+      <button class="flex-1 py-3 text-primary border-b-2 border-primary font-medium">
+       <i class="fas fa-comment-alt mr-1">
+       </i>
+       聊天
+      </button>
+      <button class="flex-1 py-3 text-gray-500 hover:bg-gray-50 transition-colors">
+       <i class="fas fa-user-friends mr-1">
+       </i>
+       联系人
+      </button>
+     </div>
+     <!-- [/MODULE] k6l_联系人分类标签 -- 切换聊天列表和联系人列表视图 -->
+     <!-- [MODULE] m7n_聊天列表 -->
+     <div class="flex-1 overflow-y-auto scrollbar-hide" id="chat-list">
+      <!-- 活跃聊天 -->
+      <div class="chat-item active flex items-center p-3 hover:bg-gray-50 cursor-pointer transition-colors border-l-4 border-primary bg-blue-50" data-contact-id="1" data-contact-name="技术部-张三">
+       <img alt="张三" class="w-10 h-10 rounded-full object-cover" src="./api/searchImage?query=male avatar with casual style, friendly expression&amp;width=40&amp;height=40"/>
+       <div class="ml-3 flex-1 min-w-0">
+        <div class="flex justify-between items-center">
+         <h3 class="font-medium text-sm truncate">
+          技术部-张三
+         </h3>
+         <span class="text-xs text-gray-400">
+          14:30
+         </span>
+        </div>
+        <p class="text-xs text-gray-500 truncate">
+         <span class="text-primary">
+          我:
+         </span>
+         好的，我明白了
+        </p>
+       </div>
+       <span class="ml-2 w-2 h-2 bg-success rounded-full">
+       </span>
+      </div>
+      <div class="chat-item flex items-center p-3 hover:bg-gray-50 cursor-pointer transition-colors" data-contact-id="2" data-contact-name="产品部-李四">
+       <img alt="李四" class="w-10 h-10 rounded-full object-cover" src="./api/searchImage?query=female avatar with professional style, smiling&amp;width=40&amp;height=40"/>
+       <div class="ml-3 flex-1 min-w-0">
+        <div class="flex justify-between items-center">
+         <h3 class="font-medium text-sm truncate">
+          产品部-李四
+         </h3>
+         <span class="text-xs text-gray-400">
+          昨天
+         </span>
+        </div>
+        <p class="text-xs text-gray-500 truncate">
+         明天的需求评审会记得参加
+        </p>
+       </div>
+       <span class="ml-2 w-2 h-2 bg-success rounded-full">
+       </span>
+      </div>
+      <div class="chat-item flex items-center p-3 hover:bg-gray-50 cursor-pointer transition-colors" data-contact-id="3" data-contact-name="设计部-王五">
+       <img alt="王五" class="w-10 h-10 rounded-full object-cover" src="./api/searchImage?query=male designer avatar, creative style&amp;width=40&amp;height=40"/>
+       <div class="ml-3 flex-1 min-w-0">
+        <div class="flex justify-between items-center">
+         <h3 class="font-medium text-sm truncate">
+          设计部-王五
+         </h3>
+         <span class="text-xs text-gray-400">
+          昨天
+         </span>
+        </div>
+        <p class="text-xs text-gray-500 truncate">
+         UI稿已经发你邮箱了
+        </p>
+       </div>
+      </div>
+      <div class="chat-item flex items-center p-3 hover:bg-gray-50 cursor-pointer transition-colors" data-contact-id="4" data-contact-name="市场部-赵六">
+       <img alt="赵六" class="w-10 h-10 rounded-full object-cover" src="./api/searchImage?query=female avatar with energetic expression, market professional&amp;width=40&amp;height=40"/>
+       <div class="ml-3 flex-1 min-w-0">
+        <div class="flex justify-between items-center">
+         <h3 class="font-medium text-sm truncate">
+          市场部-赵六
+         </h3>
+         <span class="text-xs text-gray-400">
+          周三
+         </span>
+        </div>
+        <p class="text-xs text-gray-500 truncate">
+         下周的市场活动方案需要确认
+        </p>
+       </div>
+       <span class="ml-2 w-2 h-2 bg-success rounded-full">
+       </span>
+      </div>
+      <div class="chat-item flex items-center p-3 hover:bg-gray-50 cursor-pointer transition-colors" data-contact-id="5" data-contact-name="测试部-钱七">
+       <img alt="钱七" class="w-10 h-10 rounded-full object-cover" src="./api/searchImage?query=male avatar with serious expression, tester&amp;width=40&amp;height=40"/>
+       <div class="ml-3 flex-1 min-w-0">
+        <div class="flex justify-between items-center">
+         <h3 class="font-medium text-sm truncate">
+          测试部-钱七
+         </h3>
+         <span class="text-xs text-gray-400">
+          周二
+         </span>
+        </div>
+        <p class="text-xs text-gray-500 truncate">
+         发现了几个bug，已经提交到JIRA
+        </p>
+       </div>
+      </div>
+      <!-- 未读消息提示 -->
+      <div class="chat-item flex items-center p-3 hover:bg-gray-50 cursor-pointer transition-colors" data-contact-id="6" data-contact-name="行政部-孙八">
+       <img alt="孙八" class="w-10 h-10 rounded-full object-cover" src="./api/searchImage?query=female avatar with professional style, administrative staff&amp;width=40&amp;height=40"/>
+       <div class="ml-3 flex-1 min-w-0">
+        <div class="flex justify-between items-center">
+         <h3 class="font-medium text-sm truncate">
+          行政部-孙八
+         </h3>
+         <span class="text-xs text-gray-400">
+          周一
+         </span>
+        </div>
+        <p class="text-xs text-gray-500 truncate">
+         关于下周团建的通知
+        </p>
+       </div>
+       <span class="ml-2 w-5 h-5 rounded-full bg-danger text-white text-xs flex items-center justify-center">
+        3
+       </span>
+      </div>
+     </div>
+     <!-- [/MODULE] m7n_聊天列表 -- 显示所有聊天会话，包含联系人头像、名称、最新消息预览和时间 -->
+    </aside>
+    <!-- [/MODULE] g4h_联系人列表区域 -- 左侧边栏，包含联系人搜索、分类标签和聊天列表 -->
+    <!-- [MODULE] o8p_聊天内容区域 -->
+    <div class="flex-1 flex flex-col bg-chat-bg" id="chat-content">
+     <!-- [MODULE] q9r_聊天头部信息 -->
+     <div class="bg-white p-3 border-b border-gray-200 flex items-center justify-between shadow-sm">
+      <div class="flex items-center">
+       <button class="md:hidden p-2 mr-2 rounded-full hover:bg-gray-100" id="mobile-back-btn">
+        <i class="fas fa-arrow-left">
+        </i>
+       </button>
+       <img alt="张三" class="w-10 h-10 rounded-full object-cover" src="./api/searchImage?query=male avatar with casual style, friendly expression&amp;width=40&amp;height=40"/>
+       <div class="ml-3">
+        <h2 class="font-medium" id="current-chat-name">
+         技术部-张三
+        </h2>
+        <p class="text-xs text-success flex items-center">
+         <i class="fas fa-circle w-2 h-2 mr-1">
+         </i>
+         在线
+        </p>
+       </div>
+      </div>
+      <div class="flex items-center space-x-1">
+       <button class="p-2 rounded-full hover:bg-gray-100 transition-colors">
+        <i class="fas fa-search text-gray-500">
+        </i>
+       </button>
+       <button class="p-2 rounded-full hover:bg-gray-100 transition-colors">
+        <i class="fas fa-phone text-gray-500">
+        </i>
+       </button>
+       <button class="p-2 rounded-full hover:bg-gray-100 transition-colors">
+        <i class="fas fa-video text-gray-500">
+        </i>
+       </button>
+       <button class="p-2 rounded-full hover:bg-gray-100 transition-colors">
+        <i class="fas fa-ellipsis-v text-gray-500">
+        </i>
+       </button>
+      </div>
+     </div>
+     <!-- [/MODULE] q9r_聊天头部信息 -- 显示当前聊天对象信息和操作按钮 -->
+     <!-- [MODULE] s0t_消息显示区域 -->
+     <div class="flex-1 p-4 overflow-y-auto scrollbar-hide" id="message-container">
+      <!-- 日期分隔线 -->
+      <div class="flex justify-center my-4">
+       <span class="bg-gray-300/50 text-gray-500 text-xs px-3 py-1 rounded-full">
+        今天
+       </span>
+      </div>
+      <!-- 对方消息 -->
+      <div class="message message-in flex items-start mb-4 message-appear">
+       <img alt="张三" class="w-9 h-9 rounded-full object-cover" src="./api/searchImage?query=male avatar with casual style, friendly expression&amp;width=36&amp;height=36"/>
+       <div class="ml-2 max-w-[70%]">
+        <div class="bg-chat-bubble-left rounded-lg rounded-tl-none p-3 chat-shadow">
+         <p>
+          嗨，你好！关于昨天讨论的项目进度，我有一些新的想法。
+         </p>
+        </div>
+        <span class="text-xs text-gray-400 ml-3 mt-1 inline-block">
+         10:23
+        </span>
+       </div>
+      </div>
+      <!-- 自己消息 -->
+      <div class="message message-out flex items-start justify-end mb-4 message-appear">
+       <div class="mr-2 max-w-[70%]">
+        <div class="bg-chat-bubble-right rounded-lg rounded-tr-none p-3 chat-shadow">
+         <p>
+          你好！高兴听到你有新想法，具体是什么呢？
+         </p>
+        </div>
+        <span class="text-xs text-gray-400 mr-3 mt-1 inline-block">
+         10:25
+        </span>
+       </div>
+       <img alt="我" class="w-9 h-9 rounded-full object-cover" src="./api/searchImage?query=user avatar with blue background, simple icon style&amp;width=36&amp;height=36"/>
+      </div>
+      <!-- 对方消息 -->
+      <div class="message message-in flex items-start mb-4 message-appear">
+       <img alt="张三" class="w-9 h-9 rounded-full object-cover" src="./api/searchImage?query=male avatar with casual style, friendly expression&amp;width=36&amp;height=36"/>
+       <div class="ml-2 max-w-[70%]">
+        <div class="bg-chat-bubble-left rounded-lg rounded-tl-none p-3 chat-shadow">
+         <p>
+          我觉得我们可以优化一下数据加载逻辑，现在首次加载有点慢。
+         </p>
+         <p class="mt-2">
+          我想尝试使用懒加载和预加载结合的方式，优先加载可视区域内容。
+         </p>
+        </div>
+        <span class="text-xs text-gray-400 ml-3 mt-1 inline-block">
+         10:27
+        </span>
+       </div>
+      </div>
+      <!-- 自己消息 -->
+      <div class="message message-out flex items-start justify-end mb-4 message-appear">
+       <div class="mr-2 max-w-[70%]">
+        <div class="bg-chat-bubble-right rounded-lg rounded-tr-none p-3 chat-shadow">
+         <p>
+          这个主意不错！我之前也注意到这个问题了。
+         </p>
+         <p class="mt-2">
+          你有具体的实现方案吗？我们可以一起讨论一下。
+         </p>
+        </div>
+        <span class="text-xs text-gray-400 mr-3 mt-1 inline-block">
+         10:30
+        </span>
+       </div>
+       <img alt="我" class="w-9 h-9 rounded-full object-cover" src="./api/searchImage?query=user avatar with blue background, simple icon style&amp;width=36&amp;height=36"/>
+      </div>
+      <!-- 对方正在输入 -->
+      <div class="message message-in flex items-start mb-4 hidden" id="typing-indicator">
+       <img alt="张三" class="w-9 h-9 rounded-full object-cover" src="./api/searchImage?query=male avatar with casual style, friendly expression&amp;width=36&amp;height=36"/>
+       <div class="ml-2">
+        <div class="bg-chat-bubble-left rounded-lg p-3 chat-shadow">
+         <div class="typing-indicator">
+          <span>
+          </span>
+          <span>
+          </span>
+          <span>
+          </span>
+         </div>
+        </div>
+       </div>
+      </div>
+     </div>
+     <!-- [/MODULE] s0t_消息显示区域 -- 展示聊天消息内容，包含发送者头像、消息气泡和时间戳 -->
+     <!-- [MODULE] u1v_消息输入区域 -->
+     <div class="bg-white p-3 border-t border-gray-200">
+      <div class="flex items-center mb-2 text-gray-500">
+       <button class="p-2 rounded-full hover:bg-gray-100 transition-colors">
+        <i class="fas fa-smile">
+        </i>
+       </button>
+       <button class="p-2 rounded-full hover:bg-gray-100 transition-colors">
+        <i class="fas fa-paperclip">
+        </i>
+       </button>
+       <button class="p-2 rounded-full hover:bg-gray-100 transition-colors">
+        <i class="fas fa-image">
+        </i>
+       </button>
+       <button class="p-2 rounded-full hover:bg-gray-100 transition-colors">
+        <i class="fas fa-file-alt">
+        </i>
+       </button>
+       <button class="p-2 rounded-full hover:bg-gray-100 transition-colors md:hidden">
+        <i class="fas fa-microphone">
+        </i>
+       </button>
+      </div>
+      <div class="flex items-center">
+       <textarea class="flex-1 border border-gray-300 rounded-full py-2 px-4 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary resize-none transition-all" id="message-input" placeholder="输入消息..." rows="1">
+        </textarea>
+       <button class="ml-3 bg-primary text-white p-2 rounded-full hover:bg-primary/90 transition-colors shadow-md hover:shadow-lg transform hover:-translate-y-0.5" id="send-btn">
+        <i class="fas fa-paper-plane">
+        </i>
+       </button>
+       <button class="ml-2 bg-gray-100 text-gray-500 p-2 rounded-full hover:bg-gray-200 transition-colors hidden md:flex">
+        <i class="fas fa-microphone">
+        </i>
+       </button>
+      </div>
+     </div>
+     <!-- [/MODULE] u1v_消息输入区域 -- 提供消息输入框和发送按钮，以及附加功能按钮 -->
+    </div>
+    <!-- [/MODULE] o8p_聊天内容区域 -- 中间主区域，包含聊天头部、消息显示区域和消息输入区域 -->
+   </main>
+   <!-- [/MODULE] e3f_主内容区域 -- 包含联系人列表和聊天内容两个主要部分 -->
+  </div>
+  <!-- [/MODULE] a1b_应用容器 -- 整个应用的主容器 -->
+  <!-- [MODULE] w2x_移动端底部导航 -->
+  <div class="md:hidden flex items-center justify-around bg-white border-t border-gray-200 py-2 px-4 shadow-lg z-20">
+   <button class="flex flex-col items-center text-primary" id="mobile-chat-list-btn">
+    <i class="fas fa-comment-alt text-xl">
+    </i>
+    <span class="text-xs mt-1">
+     聊天
+    </span>
+   </button>
+   <button class="flex flex-col items-center text-gray-500">
+    <i class="fas fa-user-friends text-xl">
+    </i>
+    <span class="text-xs mt-1">
+     联系人
+    </span>
+   </button>
+   <button class="flex flex-col items-center text-gray-500">
+    <i class="fas fa-bell text-xl">
+    </i>
+    <span class="text-xs mt-1">
+     通知
+    </span>
+   </button>
+   <button class="flex flex-col items-center text-gray-500" id="logout-btn">
+    <i class="fas fa-sign-out-alt text-xl">
+    </i>
+    <span class="text-xs mt-1">
+     退出
+    </span>
+   </button>
+  </div>
+  <!-- [/MODULE] w2x_移动端底部导航 -- 在移动设备上提供主要功能导航 -->
+  <!-- [MODULE] y3z_用户信息弹窗 -->
+  <div class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center" id="user-info-modal">
+   <div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 transform transition-all scale-95 opacity-0" id="modal-content">
+    <div class="p-5 border-b border-gray-200 text-center">
+     <img alt="用户头像" class="w-20 h-20 rounded-full object-cover mx-auto border-4 border-white shadow-lg" src="./api/searchImage?query=user avatar with blue background, simple icon style&amp;width=80&amp;height=80"/>
+     <h3 class="mt-3 font-bold text-lg">
+      我
+     </h3>
+     <p class="text-gray-500 text-sm">
+      在线 - 局域网用户
+     </p>
+    </div>
+    <div class="p-4">
+     <div class="flex items-center justify-between py-3 border-b border-gray-100">
+      <span class="text-gray-500">
+       用户名
+      </span>
+      <span class="font-medium" id="modal-username">
+       我
+      </span>
+     </div>
+     <div class="flex items-center justify-between py-3 border-b border-gray-100">
+      <span class="text-gray-500">
+       IP地址
+      </span>
+      <span class="font-medium">
+       192.168.1.105
+      </span>
+     </div>
+     <div class="flex items-center justify-between py-3 border-b border-gray-100">
+      <span class="text-gray-500">
+       端口
+      </span>
+      <span class="font-medium">
+       2345
+      </span>
+     </div>
+     <div class="flex items-center justify-between py-3">
+      <span class="text-gray-500">
+       在线状态
+      </span>
+      <div class="flex items-center">
+       <span class="w-3 h-3 bg-success rounded-full mr-2">
+       </span>
+       <span class="font-medium">
+        在线
+       </span>
+      </div>
+     </div>
+    </div>
+    <div class="p-4 border-t border-gray-200">
+     <button class="w-full py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors" id="close-modal-btn">
+      关闭
+     </button>
+    </div>
+   </div>
+  </div>
+  <!-- [/MODULE] y3z_用户信息弹窗 -- 显示当前用户详细信息的弹窗 -->
+  <!-- [JSMOD] z4a_聊天功能核心逻辑 -->
+  <script id="chat-core">
+   document.addEventListener('DOMContentLoaded', function () {
+  // DOM元素引用
+  var messageInput = document.getElementById('message-input');
+  var sendBtn = document.getElementById('send-btn');
+  var messageContainer = document.getElementById('message-container');
+  var chatList = document.getElementById('chat-list');
+  var chatItems = document.querySelectorAll('.chat-item');
+  var currentChatName = document.getElementById('current-chat-name');
+  var typingIndicator = document.getElementById('typing-indicator');
+  var mobileChatListBtn = document.getElementById('mobile-chat-list-btn');
+  var mobileBackBtn = document.getElementById('mobile-back-btn');
+  var chatPanel = document.getElementById('contact-panel');
+  var chatContent = document.getElementById('chat-content');
+  var userInfoBtn = document.getElementById('user-info-btn');
+  var userInfoModal = document.getElementById('user-info-modal');
+  var modalContent = document.getElementById('modal-content');
+  var closeModalBtn = document.getElementById('close-modal-btn');
+  var modalUsername = document.getElementById('modal-username');
+  var currentUsername = document.getElementById('current-username');
+  // 自动调整文本框高度
+  messageInput.addEventListener('input', function () {
+    this.style.height = 'auto';
+    var newHeight = Math.min(this.scrollHeight, 120); // 限制最大高度
+    this.style.height = newHeight + 'px';
+  });
+  // 发送消息
+  function sendMessage() {
+    var message = messageInput.value.trim();
+    if (!message) return;
+    // 创建新消息元素
+    var now = new Date();
+    var timeString = "".concat(now.getHours(), ":").concat(now.getMinutes().toString().padStart(2, '0'));
+    var messageElement = document.createElement('div');
+    messageElement.className = 'message message-out flex items-start justify-end mb-4 message-appear';
+    messageElement.innerHTML = "<div class=\"mr-2 max-w-[70%]\">\n                        <div class=\"bg-chat-bubble-right rounded-lg rounded-tr-none p-3 chat-shadow\">\n                            <p>".concat(message, "</p>\n                        </div>\n                        <span class=\"text-xs text-gray-400 mr-3 mt-1 inline-block\">").concat(timeString, "</span>\n                    </div>\n                    <img src=\"./api/searchImage?query=user avatar with blue background, simple icon style&width=36&height=36\" alt=\"\u6211\" class=\"w-9 h-9 rounded-full object-cover\">");
+
+    // 添加到消息容器
+    messageContainer.appendChild(messageElement);
+    messageContainer.scrollTop = messageContainer.scrollHeight;
+
+    // 清空输入框并重置高度
+    messageInput.value = '';
+    messageInput.style.height = 'auto';
+
+    // 更新聊天列表中的最后一条消息
+    var activeChatItem = chatList.querySelector('.chat-item.active');
+    if (activeChatItem) {
+      var lastMessageElement = activeChatItem.querySelector('p');
+      var timeElement = activeChatItem.querySelector('span');
+      lastMessageElement.innerHTML = "<span class=\"text-primary\">\u6211:</span>".concat(message.length > 20 ? message.substring(0, 20) + '...' : message);
+      timeElement.textContent = timeString;
+    }
+
+    // 模拟对方正在输入
+    setTimeout(function () {
+      typingIndicator.classList.remove('hidden');
+      messageContainer.scrollTop = messageContainer.scrollHeight;
+
+      // 模拟对方回复
+      setTimeout(function () {
+        typingIndicator.classList.add('hidden');
+        receiveMessage();
+      }, 1500);
+    }, 800);
+  }
+  // 模拟接收消息
+  function receiveMessage() {
+    var responses = ["好的，我明白了。", "这个想法不错，我们可以试试看。", "我需要一点时间来处理这个问题。", "你能详细解释一下吗？", "没问题，我会尽快完成。", "这个功能已经在开发中了。", "我刚刚测试了一下，效果很好！", "我们下午开会讨论这个问题吧。", "我同意你的观点。", "让我查一下相关资料。"];
+    var randomResponse = responses[Math.floor(Math.random() * responses.length)];
+    var now = new Date();
+    var timeString = "".concat(now.getHours(), ":").concat(now.getMinutes().toString().padStart(2, '0'));
+    var messageElement = document.createElement('div');
+    messageElement.className = 'message message-in flex items-start mb-4 message-appear';
+    messageElement.innerHTML = "<img src=\"./api/searchImage?query=male avatar with casual style, friendly expression&width=36&height=36\" alt=\"\u5F20\u4E09\" class=\"w-9 h-9 rounded-full object-cover\">\n                    <div class=\"ml-2 max-w-[70%]\">\n                        <div class=\"bg-chat-bubble-left rounded-lg rounded-tl-none p-3 chat-shadow\">\n                            <p>".concat(randomResponse, "</p>\n                        </div>\n                        <span class=\"text-xs text-gray-400 ml-3 mt-1 inline-block\">").concat(timeString, "</span>\n                    </div>");
+    messageContainer.appendChild(messageElement);
+    messageContainer.scrollTop = messageContainer.scrollHeight;
+
+    // 更新聊天列表中的最后一条消息
+    var activeChatItem = chatList.querySelector('.chat-item.active');
+    if (activeChatItem) {
+      var lastMessageElement = activeChatItem.querySelector('p');
+      var timeElement = activeChatItem.querySelector('span');
+      lastMessageElement.textContent = randomResponse.length > 25 ? randomResponse.substring(0, 25) + '...' : randomResponse;
+      timeElement.textContent = timeString;
+    }
+  }
+  // 发送按钮点击事件
+  sendBtn.addEventListener('click', sendMessage);
+  // 回车发送消息
+  messageInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+  // 切换聊天
+  chatItems.forEach(function (item) {
+    item.addEventListener('click', function () {
+      // 更新活跃状态
+      chatItems.forEach(function (i) {
+        i.classList.remove('active', 'bg-blue-50', 'border-l-4', 'border-primary');
+      });
+      this.classList.add('active', 'bg-blue-50', 'border-l-4', 'border-primary');
+
+      // 更新聊天标题
+      var contactName = this.getAttribute('data-contact-name');
+      currentChatName.textContent = contactName;
+
+      // 在移动设备上隐藏聊天列表，显示聊天内容
+      if (window.innerWidth < 768) {
+        chatPanel.classList.add('hidden');
+        chatContent.classList.remove('hidden');
+      }
+
+      // 模拟加载聊天历史...
+      messageContainer.scrollTop = messageContainer.scrollHeight;
+    });
+  });
+  // 移动端返回按钮
+  mobileBackBtn.addEventListener('click', function () {
+    chatPanel.classList.remove('hidden');
+    chatContent.classList.add('hidden');
+  });
+  // 移动端聊天列表按钮
+  mobileChatListBtn.addEventListener('click', function () {
+    chatPanel.classList.remove('hidden');
+    chatContent.classList.add('hidden');
+  });
+  // 打开用户信息弹窗
+  userInfoBtn.addEventListener('click', function () {
+    userInfoModal.classList.add('flex');
+    setTimeout(function () {
+      modalContent.classList.remove('scale-95', 'opacity-0');
+      modalContent.classList.add('scale-100', 'opacity-100');
+    }, 10);
+  });
+  // 关闭用户信息弹窗
+  function closeModal() {
+    modalContent.classList.remove('scale-100', 'opacity-100');
+    modalContent.classList.add('scale-95', 'opacity-0');
+    setTimeout(function () {
+      userInfoModal.classList.remove('flex');
+    }, 300);
+  }
+  closeModalBtn.addEventListener('click', closeModal);
+  userInfoModal.addEventListener('click', function (e) {
+    if (e.target === userInfoModal) {
+      closeModal();
+    }
+  });
+  // 点击模态框内容区域不关闭
+  modalContent.addEventListener('click', function (e) {
+    e.stopPropagation();
+  });
+  // 初始化
+  document.addEventListener('DOMContentLoaded', function () {
+    // 确保消息区域滚动到底部
+    messageContainer.scrollTop = messageContainer.scrollHeight;
+
+    // 移动端默认隐藏聊天列表
+    if (window.innerWidth < 768) {
+      chatPanel.classList.remove('hidden');
+      chatContent.classList.remove('hidden');
+    }
+  });
+});
+  </script>
+  <!-- [/JSMOD] z4a_聊天功能核心逻辑 -- 处理消息发送、接收、聊天切换、模态框控制等核心功能 -->
+  <!-- [JSMOD] c5d_响应式布局调整 -->
+  <script id="responsive-handler">
+   document.addEventListener('DOMContentLoaded', function () {
+  var chatPanel = document.getElementById('contact-panel');
+  var chatContent = document.getElementById('chat-content');
+  var mobileBackBtn = document.getElementById('mobile-back-btn');
+  var mobileChatListBtn = document.getElementById('mobile-chat-list-btn');
+  // 处理窗口大小变化
+  function handleResize() {
+    if (window.innerWidth >= 768) {
+      // 桌面视图
+      chatPanel.classList.remove('hidden');
+      chatContent.classList.remove('hidden');
+    } else {
+      // 移动视图 - 保持当前状态
+    }
+  }
+  // 初始检查
+  handleResize();
+  // 监听窗口大小变化
+  window.addEventListener('resize', handleResize);
+});
+  </script>
+  <!-- [/JSMOD] c5d_响应式布局调整 -- 处理不同屏幕尺寸下的布局切换 -->
+ </body>
+</html>
+<!-- [MODULE] z4a_登录页面 -->
+<div class="fixed inset-0 bg-gray-100 flex items-center justify-center z-50" id="login-page">
+  <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all">
+    <div class="bg-primary p-6 text-center">
+      <i class="fas fa-comments text-4xl text-white mb-3"></i>
+      <h2 class="text-white text-2xl font-bold">局域网聊天室</h2>
+      <p class="text-white/80 mt-1">连接同事，畅聊工作</p>
+    </div>
+    <div class="p-6">
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="login-username">
+          昵称
+        </label>
+        <input class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="login-username" type="text" placeholder="请输入您的昵称">
+      </div>
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="login-password">
+          密码
+        </label>
+        <input class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="login-password" type="password" placeholder="请输入密码">
+      </div>
+      <div class="mb-6">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="server-select">
+          选择服务器
+        </label>
+        <select class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="server-select">
+          <option value="">正在加载服务器列表...</option>
+        </select>
+      </div>
+      <div class="flex items-center justify-between">
+        <button class="bg-primary hover:bg-primary/90 text-white font-bold py-3 px-8 rounded-lg focus:outline-none focus:shadow-outline transition-colors w-full" id="login-btn">
+          登录
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- [/MODULE] z4a_登录页面 -- 登录界面，包含昵称输入框、密码输入框、服务器选择下拉框和登录按钮 -->
+<!-- [JSMOD] b5c_页面切换逻辑 -->
+<script id="page-switch-script">
+document.addEventListener('DOMContentLoaded', async () => {
+  const loginBtn = document.getElementById('login-btn');
+  const usernameInput = document.getElementById('login-username');
+  const passwordInput = document.getElementById('login-password');
+  const serverSelect = document.getElementById('server-select');
+
+  let config = { fixedPassword: '123456', servers: [] };
+  try {
+    const res = await fetch('/api/config');
+    if (res.ok) {
+      config = await res.json();
+    }
+  } catch (e) {
+    console.warn('加载配置失败，使用默认值', e);
+  }
+
+  if (config.appName) {
+    document.title = config.appName;
+  }
+
+  try {
+    serverSelect.innerHTML = '';
+    (config.servers || []).forEach((s) => {
+      const opt = document.createElement('option');
+      opt.value = s.ws;
+      opt.textContent = s.name;
+      serverSelect.appendChild(opt);
+    });
+    if (!serverSelect.innerHTML) {
+      const opt = document.createElement('option');
+      opt.value = 'ws://127.0.0.1:8000/ws';
+      opt.textContent = '本地开发服务器 (127.0.0.1:8000)';
+      serverSelect.appendChild(opt);
+    }
+  } catch (e) {
+    console.error('填充服务器列表失败', e);
+  }
+
+  function doLogin() {
+    const username = (usernameInput.value || '').trim();
+    const password = (passwordInput.value || '').trim();
+    const wsUrl = serverSelect.value;
+
+    if (!username) {
+      alert('请输入昵称');
+      return;
+    }
+    if (password !== (config.fixedPassword || '123456')) {
+      alert('密码错误，固定密码为 123456');
+      return;
+    }
+    if (!wsUrl) {
+      alert('请选择服务器地址');
+      return;
+    }
+
+    // 保存登录信息并跳转到聊天室页面
+    localStorage.setItem('chat.username', username);
+    localStorage.setItem('chat.ws', wsUrl);
+    window.location.href = '/chat';
+  }
+
+  if (loginBtn) loginBtn.addEventListener('click', doLogin);
+  if (usernameInput) usernameInput.addEventListener('keyup', (e) => { if (e.key === 'Enter') doLogin(); });
+  if (passwordInput) passwordInput.addEventListener('keyup', (e) => { if (e.key === 'Enter') doLogin(); });
+});
+</script>
+<!-- [/JSMOD] b5c_页面切换逻辑 -- 处理登录页面与聊天页面的切换，更新用户信息显示 -->

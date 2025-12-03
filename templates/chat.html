@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>OODaiP聊天室</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+    <script src="/static/js/jquery-3.7.1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#1677FF',
+                        secondary: '#0F172A',
+                        success: '#00B42A',
+                        danger: '#F53F3F',
+                        'chat-bg': '#E5E9F2',
+                        'chat-bubble-left': '#FFFFFF',
+                        'chat-bubble-right': '#95EC69'
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'sans-serif']
+                    }
+                }
+            }
+        };
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .scrollbar-hide {
+                -ms-overflow-style: none;
+                scrollbar-width: none;
+            }
+            .scrollbar-hide::-webkit-scrollbar {
+                display: none;
+            }
+            .chat-shadow {
+                box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            }
+        }
+    </style>
+</head>
+<body class="font-inter bg-gray-100 h-screen flex flex-col overflow-hidden text-dark">
+    <!-- Top Nav -->
+    <header class="bg-primary text-white py-3 px-4 flex items-center justify-between shadow-md z-10">
+        <div class="flex items-center space-x-3">
+            <i class="fas fa-comments text-2xl"></i>
+            <h1 class="text-xl font-bold">OODaiP聊天室</h1>
+        </div>
+        <div class="flex items-center space-x-4">
+            <button class="p-2 rounded-full hover:bg-primary/80 transition-colors" onclick="window.location.href='/'">
+                <i class="fas fa-sign-out-alt"></i> 退出
+            </button>
+            <div class="flex items-center space-x-2 p-1">
+                <span class="hidden md:inline-block font-medium" id="current-username">{{ nickname }}</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex flex-1 overflow-hidden">
+        <!-- Chat Content -->
+        <div class="flex-1 flex flex-col bg-chat-bg" id="chat-content">
+            <!-- Messages -->
+            <div class="flex-1 p-4 overflow-y-auto scrollbar-hide" id="message-container">
+                <!-- Messages will be appended here -->
+            </div>
+
+            <!-- Input Area -->
+            <div class="bg-white p-3 border-t border-gray-200 relative">
+                <!-- Emoji Picker Panel -->
+                <div id="emoji-picker" class="hidden absolute bottom-full left-0 mb-2 ml-2 bg-white border border-gray-200 rounded-lg shadow-lg p-2 w-64 grid grid-cols-6 gap-1 z-50 h-48 overflow-y-auto">
+                    <!-- Emojis will be injected here -->
+                </div>
+
+                <!-- Toolbar -->
+                <div class="flex items-center mb-2 text-gray-500 space-x-2 overflow-x-auto">
+                    <button id="emoji-btn" class="p-2 rounded-full hover:bg-gray-100 relative">😀</button>
+                    <button class="p-2 rounded-full hover:bg-gray-100 text-xs whitespace-nowrap" onclick="insertText('@成小理 ')">@成小理</button>
+                    <button class="p-2 rounded-full hover:bg-gray-100 text-xs whitespace-nowrap" onclick="insertText('@音乐一下 ')">@音乐一下</button>
+                    <button class="p-2 rounded-full hover:bg-gray-100 text-xs whitespace-nowrap" onclick="insertText('@电影 ')">@电影</button>
+                    <button class="p-2 rounded-full hover:bg-gray-100 text-xs whitespace-nowrap" onclick="insertText('@天气 ')">@天气</button>
+                    <button class="p-2 rounded-full hover:bg-gray-100 text-xs whitespace-nowrap" onclick="insertText('@新闻 ')">@新闻</button>
+                    <button class="p-2 rounded-full hover:bg-gray-100 text-xs whitespace-nowrap" onclick="insertText('@小视频 ')">@小视频</button>
+                    <button class="p-2 rounded-full hover:bg-gray-100 text-xs whitespace-nowrap" onclick="alert('历史记录功能正在建设中...')">
+                        <i class="fas fa-history"></i> 历史
+                    </button>
+                </div>
+                <div class="flex items-center">
+                    <textarea class="flex-1 border border-gray-300 rounded-full py-2 px-4 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary resize-none transition-all" id="message-input" placeholder="输入消息..." rows="1"></textarea>
+                    <button class="ml-3 bg-primary text-white p-2 rounded-full hover:bg-primary/90 transition-colors shadow-md" id="send-btn">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Sidebar for Groups -->
+        <div class="w-64 bg-white border-l border-gray-200 flex flex-col hidden md:flex">
+            <!-- Current Room Info -->
+            <div class="p-4 border-b border-gray-200 bg-blue-50">
+                <h2 class="text-sm font-bold text-gray-500 uppercase mb-2">当前群聊</h2>
+                <div class="flex items-center mb-2">
+                    <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white mr-2">
+                        <i class="fas fa-hashtag"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-gray-800" id="current-room-name">默认群聊</h3>
+                        <p class="text-xs text-gray-500"><span id="online-count">0</span> 人在线</p>
+                    </div>
+                </div>
+                <!-- User List Toggle -->
+                <div class="mt-2">
+                    <button id="toggle-users-btn" class="text-xs text-primary hover:underline focus:outline-none">
+                        查看成员 <i class="fas fa-chevron-down ml-1 transition-transform"></i>
+                    </button>
+                    <div id="room-users-list" class="hidden mt-2 space-y-1 max-h-32 overflow-y-auto text-sm text-gray-600">
+                        <!-- Users will be listed here -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-4 border-b border-gray-200 bg-gray-50">
+                <h2 class="text-lg font-bold mb-2">切换群聊</h2>
+                <div class="relative">
+                    <input type="text" id="group-search" placeholder="搜索群聊..." class="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
+                    <i class="fas fa-search absolute left-3 top-3 text-gray-400 text-xs"></i>
+                </div>
+            </div>
+            <div class="flex-1 overflow-y-auto" id="group-list">
+                <!-- Groups will be populated here -->
+                <div class="p-4 text-center text-gray-500 text-sm">正在加载...</div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        var socket;
+        var nickname = "{{ nickname }}";
+        var currentRoom = 'default_room';
+        var serverUrl = localStorage.getItem('chat_server_url') || 'http://' + document.domain + ':' + location.port;
+        var allRooms = [];
+
+        function insertText(text) {
+            var $input = $('#message-input');
+            $input.val($input.val() + text);
+            $input.focus();
+        }
+
+        function appendMessage(data, isSelf) {
+            var alignClass = isSelf ? 'justify-end' : '';
+            var bubbleColor = isSelf ? 'bg-chat-bubble-right rounded-tr-none' : 'bg-chat-bubble-left rounded-tl-none';
+            var userLabel = isSelf ? '' : `<div class="text-xs text-gray-500 mb-1 ml-1">${data.user}</div>`;
+            // Simple avatar generation
+            var avatar = isSelf ? 
+                `<div class="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-white ml-2 font-bold">${nickname.charAt(0)}</div>` :
+                `<div class="w-9 h-9 rounded-full bg-gray-400 flex items-center justify-center text-white mr-2 font-bold">${data.user.charAt(0)}</div>`;
+            
+            var html = `
+                <div class="flex items-start mb-4 ${alignClass}">
+                    ${!isSelf ? avatar : ''}
+                    <div class="max-w-[70%]">
+                        ${userLabel}
+                        <div class="${bubbleColor} rounded-lg p-3 chat-shadow">
+                            <p>${data.text}</p>
+                        </div>
+                    </div>
+                    ${isSelf ? avatar : ''}
+                </div>
+            `;
+            $('#message-container').append(html);
+            $('#message-container').scrollTop($('#message-container')[0].scrollHeight);
+        }
+
+        function loadRooms() {
+            // Use the current server URL for config if possible, otherwise fallback
+            // Since this page is served from the server, relative path works if same domain
+            // But if we are on a different domain (e.g. via ngrok but API is local?), we should be careful.
+            // For now, let's try fetching from the same origin as the page.
+            $.getJSON('/api/config', function(data) {
+                if (data.rooms) {
+                    allRooms = data.rooms;
+                    renderRoomList(allRooms);
+                }
+            });
+        }
+
+        function renderRoomList(rooms) {
+            var $list = $('#group-list');
+            $list.empty();
+            
+            if (rooms.length === 0) {
+                $list.append('<div class="p-4 text-center text-gray-500 text-sm">无群聊</div>');
+                return;
+            }
+
+            rooms.forEach(function(room) {
+                var isActive = room.id === currentRoom;
+                var activeClass = isActive ? 'bg-blue-50 border-l-4 border-primary' : 'hover:bg-gray-50 border-l-4 border-transparent';
+                
+                var $item = $(`
+                    <div class="p-3 cursor-pointer transition-colors ${activeClass} group-item" data-id="${room.id}">
+                        <div class="flex items-center">
+                            <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-primary mr-3">
+                                <i class="fas fa-users"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-medium text-gray-800">${room.name}</h3>
+                                <p class="text-xs text-gray-500 truncate">点击加入群聊</p>
+                            </div>
+                        </div>
+                    </div>
+                `);
+                
+                $item.click(function() {
+                    var roomId = $(this).data('id');
+                    if (roomId !== currentRoom) {
+                        switchRoom(roomId);
+                    }
+                });
+                
+                $list.append($item);
+            });
+        }
+
+        function switchRoom(newRoomId) {
+            if (currentRoom) {
+                socket.emit('leave', {username: nickname, room: currentRoom});
+            }
+            
+            // Clear messages
+            $('#message-container').empty();
+            appendMessage({user: 'System', text: '正在切换房间...'}, false);
+            
+            currentRoom = newRoomId;
+            
+            // Update room name in UI
+            var roomName = allRooms.find(r => r.id === newRoomId)?.name || '未知群聊';
+            $('#current-room-name').text(roomName);
+            
+            socket.emit('join', {username: nickname, room: currentRoom});
+            
+            // Re-render list to update active state
+            renderRoomList(allRooms); // Need to filter if search is active? 
+            // Actually, let's just update the search filter
+            var searchTerm = $('#group-search').val().trim().toLowerCase();
+            if (searchTerm) {
+                var filtered = allRooms.filter(r => r.name.toLowerCase().includes(searchTerm));
+                renderRoomList(filtered);
+            } else {
+                renderRoomList(allRooms);
+            }
+        }
+
+        $(document).ready(function() {
+            loadRooms();
+
+            // Search functionality
+            $('#group-search').on('input', function() {
+                var term = $(this).val().trim().toLowerCase();
+                if (term) {
+                    var filtered = allRooms.filter(r => r.name.toLowerCase().includes(term));
+                    renderRoomList(filtered);
+                } else {
+                    renderRoomList(allRooms);
+                }
+            });
+
+            // Emoji Picker Logic
+            const emojis = [
+                '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇',
+                '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚',
+                '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🤩',
+                '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣',
+                '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡', '🤬',
+                '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗',
+                '🤔', '🤭', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😯',
+                '😦', '😧', '😮', '😲', '😴', '🤤', '😪', '😵', '🤐', '🥴',
+                '🤢', '🤮', '🤧', '😷', '🤒', '🤕', '🤑', '🤠', '😈', '👿',
+                '👹', '👺', '🤡', '💩', '👻', '💀', '☠️', '👽', '👾', '🤖',
+                '🎃', '😺', '😸', '😹', '😻', '😼', '😽', '🙀', '😿', '😾',
+                '👍', '👎', '👊', '✊', '🤛', '🤜', '🤞', '✌️', '🤟', '🤘',
+                '👌', '🤏', '👈', '👉', '👆', '👇', '☝️', '✋', '🤚', '🖐️',
+                '🖖', '👋', '🤙', '💪', '🖕', '✍️', '🙏', '🦵', '🦶', '👂',
+                '👃', '🧠', '🦷', '🦴', '👀', '👁️', '👅', '👄', '💋', '❤️',
+                '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️',
+                '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '☮️', '✝️',
+                '☪️', '🕉️', '☸️', '✡️', '🔯', '🕎', '☯️', '☦️', '🛐', '⛎',
+                '♈', '♉', '♊', '♋', '♌', '♍', '♎', '♏', '♐', '♑', '♒',
+                '♓', '🆔', 'atom'
+            ];
+
+            const $emojiPicker = $('#emoji-picker');
+            const $emojiBtn = $('#emoji-btn');
+
+            // Populate emojis
+            emojis.forEach(emoji => {
+                const $btn = $('<button class="p-2 hover:bg-gray-100 rounded text-xl">' + emoji + '</button>');
+                $btn.click(function(e) {
+                    e.stopPropagation(); // Prevent closing the picker immediately
+                    insertText(emoji);
+                });
+                $emojiPicker.append($btn);
+            });
+
+            // Toggle picker
+            $emojiBtn.click(function(e) {
+                e.stopPropagation();
+                $emojiPicker.toggleClass('hidden');
+            });
+
+            // Close picker when clicking outside
+            $(document).click(function() {
+                if (!$emojiPicker.hasClass('hidden')) {
+                    $emojiPicker.addClass('hidden');
+                }
+            });
+
+            // Prevent closing when clicking inside picker
+            $emojiPicker.click(function(e) {
+                e.stopPropagation();
+            });
+
+            console.log("Connecting to:", serverUrl);
+            socket = io(serverUrl);
+
+            socket.on('connect', function() {
+                console.log('Connected');
+                // Only join if not already joined (reconnection logic handled by socket.io usually, but here we init)
+                // We send the currentRoom which defaults to 'default_room'
+                socket.emit('join', {username: nickname, room: currentRoom});
+            });
+
+            socket.on('message', function(data) {
+                console.log('Received:', data);
+                var isSelf = data.user === nickname;
+                appendMessage(data, isSelf);
+
+                // Handle AI Trigger here to ensure correct order (after user message is displayed)
+                if (isSelf && data.text.trim().startsWith('@成小理')) {
+                    var prompt = data.text.replace('@成小理', '').trim();
+                    if (prompt) {
+                        triggerAIResponse(prompt);
+                    }
+                }
+
+                // Handle Music Trigger
+                if (isSelf && data.text.trim().startsWith('@音乐一下')) {
+                    triggerMusicResponse();
+                }
+                
+                // Handle Movie Trigger
+                if (isSelf && data.text.trim().startsWith('@电影')) {
+                    var url = data.text.replace('@电影', '').trim();
+                    if (url) {
+                        triggerMovieResponse(url);
+                    }
+                }
+                
+                // Handle Weather Trigger
+                if (isSelf && data.text.trim().startsWith('@天气')) {
+                    var city = data.text.replace('@天气', '').trim();
+                    if (city) {
+                        triggerWeatherResponse(city);
+                    }
+                }
+
+                // Handle News Trigger
+                if (isSelf && data.text.trim() === '@新闻') {
+                    triggerNewsResponse();
+                }
+                
+                // Handle Video Trigger
+                if (isSelf && data.text.trim().startsWith('@小视频')) {
+                    var type = data.text.replace('@小视频', '').trim();
+                    triggerVideoResponse(type);
+                }
+            });
+
+            async function triggerAIResponse(prompt) {
+                // Create AI message bubble placeholder
+                var aiBubbleId = 'ai-msg-' + Date.now();
+                var aiAvatar = `<div class="w-9 h-9 rounded-full bg-purple-500 flex items-center justify-center text-white mr-2 font-bold">AI</div>`;
+                var aiHtml = `
+                    <div class="flex items-start mb-4">
+                        ${aiAvatar}
+                        <div class="max-w-[70%]">
+                            <div class="text-xs text-gray-500 mb-1 ml-1">成小理 (AI)</div>
+                            <div class="bg-purple-50 rounded-lg p-3 chat-shadow rounded-tl-none">
+                                <p id="${aiBubbleId}" class="whitespace-pre-wrap">Thinking...</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                $('#message-container').append(aiHtml);
+                $('#message-container').scrollTop($('#message-container')[0].scrollHeight);
+
+                try {
+                    const response = await fetch('/api/ai_chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ prompt: prompt })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    var $aiContent = $('#' + aiBubbleId);
+                    $aiContent.text(''); // Clear "Thinking..."
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+
+                        const chunk = decoder.decode(value, { stream: true });
+                        const lines = chunk.split('\n');
+
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                const dataStr = line.slice(6);
+                                if (dataStr === '[DONE]') break;
+                                try {
+                                    const data = JSON.parse(dataStr);
+                                    if (data.content) {
+                                        $aiContent.append(document.createTextNode(data.content));
+                                        $('#message-container').scrollTop($('#message-container')[0].scrollHeight);
+                                    } else if (data.error) {
+                                        $aiContent.text('Error: ' + data.error);
+                                    }
+                                } catch (e) {
+                                    console.error('Error parsing JSON:', e);
+                                }
+                            }
+                        }
+                    }
+
+                } catch (error) {
+                    console.error('AI Error:', error);
+                    $('#' + aiBubbleId).text('AI 出错了，请稍后再试。');
+                }
+            }
+
+            async function triggerMusicResponse() {
+                var musicBubbleId = 'music-msg-' + Date.now();
+                var musicAvatar = `<div class="w-9 h-9 rounded-full bg-green-500 flex items-center justify-center text-white mr-2 font-bold"><i class="fas fa-music"></i></div>`;
+                
+                var loadingHtml = `
+                    <div class="flex items-start mb-4">
+                        ${musicAvatar}
+                        <div class="max-w-[90%]">
+                            <div class="text-xs text-gray-500 mb-1 ml-1">成小理 (DJ)</div>
+                            <div id="${musicBubbleId}" class="bg-white rounded-lg p-4 chat-shadow rounded-tl-none border border-green-100 min-w-[300px]">
+                                <div class="flex items-center space-x-2 text-gray-500">
+                                    <i class="fas fa-circle-notch fa-spin"></i>
+                                    <span>正在为您挑选音乐...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                $('#message-container').append(loadingHtml);
+                $('#message-container').scrollTop($('#message-container')[0].scrollHeight);
+                
+                try {
+                    const response = await fetch('/api/music');
+                    const data = await response.json();
+                    
+                    if (data.code === 200 && data.data) {
+                        var music = data.data;
+                        var cardHtml = `
+                            <div class="bg-white rounded-lg overflow-hidden shadow-md max-w-sm">
+                                <div class="relative h-48">
+                                    <img src="${music.image || 'https://via.placeholder.com/300x200?text=Music'}" alt="${music.name}" class="w-full h-full object-cover">
+                                    <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4">
+                                        <h3 class="text-white font-bold text-lg truncate">${music.name}</h3>
+                                        <p class="text-gray-200 text-sm truncate">${music.singer}</p>
+                                    </div>
+                                </div>
+                                <div class="p-3 bg-gray-50">
+                                    <audio controls autoplay class="w-full h-8" src="${music.url}">
+                                        您的浏览器不支持音频播放。
+                                    </audio>
+                                </div>
+                            </div>
+                        `;
+                        
+                        $(`#${musicBubbleId}`).html(cardHtml).removeClass('p-4 bg-white border border-green-100').addClass('p-0 bg-transparent border-0');
+                    } else {
+                        $(`#${musicBubbleId}`).html(`
+                            <div class="text-red-500">
+                                <p class="font-bold"><i class="fas fa-exclamation-circle"></i> 获取音乐失败</p>
+                                <p class="text-sm">${data.msg || '未知错误'}</p>
+                            </div>
+                        `);
+                    }
+                } catch (error) {
+                    console.error(error);
+                    $(`#${musicBubbleId}`).html(`
+                        <div class="text-red-500">
+                            <p class="font-bold"><i class="fas fa-exclamation-circle"></i> 网络错误</p>
+                            <p class="text-sm">无法连接到音乐服务</p>
+                        </div>
+                    `);
+                }
+            }
+
+            function triggerMovieResponse(url) {
+                var movieBubbleId = 'movie-msg-' + Date.now();
+                var movieAvatar = `<div class="w-9 h-9 rounded-full bg-red-500 flex items-center justify-center text-white mr-2 font-bold"><i class="fas fa-film"></i></div>`;
+                
+                // Use a reliable parsing API
+                var parseUrl = "https://jx.m3u8.tv/jiexi/?url=" + url;
+                
+                var cardHtml = `
+                    <div class="flex items-start mb-4">
+                        ${movieAvatar}
+                        <div class="max-w-[90%]">
+                            <div class="text-xs text-gray-500 mb-1 ml-1">成小理 (放映员)</div>
+                            <div class="bg-black rounded-lg overflow-hidden shadow-lg chat-shadow rounded-tl-none">
+                                <iframe src="${parseUrl}" width="400" height="400" allowfullscreen border="0" frameborder="0"></iframe>
+                                <div class="bg-gray-900 text-gray-400 text-xs p-2 truncate max-w-[400px]">
+                                    源: ${url}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                $('#message-container').append(cardHtml);
+                $('#message-container').scrollTop($('#message-container')[0].scrollHeight);
+            }
+
+            async function triggerNewsResponse() {
+                var newsBubbleId = 'news-msg-' + Date.now();
+                var newsAvatar = `<div class="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white mr-2 font-bold"><i class="fas fa-newspaper"></i></div>`;
+                
+                var loadingHtml = `
+                    <div class="flex items-start mb-4">
+                        ${newsAvatar}
+                        <div class="max-w-[90%]">
+                            <div class="text-xs text-gray-500 mb-1 ml-1">成小理 (新闻主播)</div>
+                            <div id="${newsBubbleId}" class="bg-white rounded-lg p-4 chat-shadow rounded-tl-none border border-indigo-100 min-w-[300px]">
+                                <div class="flex items-center space-x-2 text-gray-500">
+                                    <i class="fas fa-circle-notch fa-spin"></i>
+                                    <span>正在获取最新新闻...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                $('#message-container').append(loadingHtml);
+                $('#message-container').scrollTop($('#message-container')[0].scrollHeight);
+                
+                try {
+                    const response = await fetch('/api/news');
+                    const data = await response.json();
+                    
+                    if (data.code === 200 && data.data && data.data.length > 0) {
+                        var newsList = data.data;
+                        var listHtml = `
+                            <div class="bg-white rounded-lg shadow-md overflow-hidden min-w-[300px] max-w-md border border-indigo-100">
+                                <div class="bg-indigo-600 text-white p-3 font-bold flex items-center">
+                                    <i class="fas fa-newspaper mr-2"></i> 今日热点
+                                </div>
+                                <div class="divide-y divide-gray-100">
+                        `;
+                        
+                        newsList.forEach((item, index) => {
+                            var detailId = `news-detail-${newsBubbleId}-${index}`;
+                            // Escape quotes in title just in case
+                            var safeTitle = item.title.replace(/"/g, '&quot;');
+                            
+                            listHtml += `
+                                <div class="news-item">
+                                    <div class="p-3 hover:bg-indigo-50 cursor-pointer flex justify-between items-center transition-colors" onclick="$('#${detailId}').slideToggle()">
+                                        <span class="font-medium text-gray-800 text-sm line-clamp-1">${safeTitle}</span>
+                                        <i class="fas fa-chevron-down text-gray-400 text-xs"></i>
+                                    </div>
+                                    <div id="${detailId}" class="hidden bg-gray-50 p-3 border-t border-gray-100 text-sm">
+                                        ${item.image ? `<img src="${item.image}" class="w-full h-32 object-cover rounded mb-2" onerror="this.style.display='none'">` : ''}
+                                        <p class="text-gray-600 mb-2 text-xs">${item.brief}</p>
+                                        <div class="flex justify-between items-center mt-2">
+                                            <span class="text-xs text-gray-400">${item.time ? item.time.split(' ')[1] : ''}</span>
+                                            <a href="${item.url}" target="_blank" class="text-indigo-600 hover:underline text-xs">阅读全文 <i class="fas fa-external-link-alt"></i></a>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        
+                        listHtml += `
+                                </div>
+                            </div>
+                        `;
+                        
+                        $(`#${newsBubbleId}`).html(listHtml).removeClass('p-4 bg-white border border-indigo-100').addClass('p-0 bg-transparent border-0');
+                    } else {
+                        $(`#${newsBubbleId}`).html(`
+                            <div class="text-red-500">
+                                <p class="font-bold"><i class="fas fa-exclamation-circle"></i> 获取失败</p>
+                                <p class="text-sm">${data.msg || '暂无新闻数据'}</p>
+                            </div>
+                        `);
+                    }
+                } catch (error) {
+                    console.error(error);
+                    $(`#${newsBubbleId}`).html(`
+                        <div class="text-red-500">
+                            <p class="font-bold"><i class="fas fa-exclamation-circle"></i> 网络错误</p>
+                            <p class="text-sm">无法连接到新闻服务</p>
+                        </div>
+                    `);
+                }
+            }
+
+            async function triggerVideoResponse(type) {
+                var videoBubbleId = 'video-msg-' + Date.now();
+                var videoAvatar = `<div class="w-9 h-9 rounded-full bg-pink-500 flex items-center justify-center text-white mr-2 font-bold"><i class="fab fa-tiktok"></i></div>`;
+                
+                var loadingHtml = `
+                    <div class="flex items-start mb-4">
+                        ${videoAvatar}
+                        <div class="max-w-[90%]">
+                            <div class="text-xs text-gray-500 mb-1 ml-1">成小理 (视频推荐)</div>
+                            <div id="${videoBubbleId}" class="bg-white rounded-lg p-4 chat-shadow rounded-tl-none border border-pink-100 min-w-[300px]">
+                                <div class="flex items-center space-x-2 text-gray-500">
+                                    <i class="fas fa-circle-notch fa-spin"></i>
+                                    <span>正在${type ? '搜索 ' + type : '随机推荐'} 小视频...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                $('#message-container').append(loadingHtml);
+                $('#message-container').scrollTop($('#message-container')[0].scrollHeight);
+                
+                try {
+                    const response = await fetch(`/api/video?type=${encodeURIComponent(type)}`);
+                    const data = await response.json();
+                    
+                    if (data.code === 200 && data.data && data.data.url) {
+                        var videoUrl = data.data.url;
+                        // Fix for some APIs returning http mixed with https
+                        if (videoUrl.startsWith('http:')) videoUrl = videoUrl.replace('http:', 'https:');
+                        
+                        var cardHtml = `
+                            <div class="bg-black rounded-lg overflow-hidden shadow-lg max-w-xs relative group">
+                                <video src="${videoUrl}" class="w-full max-h-[400px] object-contain" controls autoplay loop playsinline></video>
+                                <div class="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded-full backdrop-blur-sm">
+                                    <i class="fab fa-tiktok"></i> 抖音推荐
+                                </div>
+                                ${type ? `<div class="absolute bottom-2 left-2 bg-pink-600 text-white text-xs px-2 py-1 rounded backdrop-blur-sm"># ${type}</div>` : ''}
+                            </div>
+                        `;
+                        
+                        $(`#${videoBubbleId}`).html(cardHtml).removeClass('p-4 bg-white border border-pink-100').addClass('p-0 bg-transparent border-0');
+                    } else {
+                        $(`#${videoBubbleId}`).html(`
+                            <div class="text-red-500">
+                                <p class="font-bold"><i class="fas fa-exclamation-circle"></i> 获取失败</p>
+                                <p class="text-sm">${data.msg || '暂无视频数据'}</p>
+                            </div>
+                        `);
+                    }
+                } catch (error) {
+                    console.error(error);
+                    $(`#${videoBubbleId}`).html(`
+                        <div class="text-red-500">
+                            <p class="font-bold"><i class="fas fa-exclamation-circle"></i> 网络错误</p>
+                            <p class="text-sm">无法连接到视频服务</p>
+                        </div>
+                    `);
+                }
+            }
+
+            async function triggerWeatherResponse(city) {
+                var weatherBubbleId = 'weather-msg-' + Date.now();
+                var weatherAvatar = `<div class="w-9 h-9 rounded-full bg-blue-400 flex items-center justify-center text-white mr-2 font-bold"><i class="fas fa-cloud-sun"></i></div>`;
+                
+                var loadingHtml = `
+                    <div class="flex items-start mb-4">
+                        ${weatherAvatar}
+                        <div class="max-w-[90%]">
+                            <div class="text-xs text-gray-500 mb-1 ml-1">成小理 (气象台)</div>
+                            <div id="${weatherBubbleId}" class="bg-white rounded-lg p-4 chat-shadow rounded-tl-none border border-blue-100 min-w-[300px]">
+                                <div class="flex items-center space-x-2 text-gray-500">
+                                    <i class="fas fa-circle-notch fa-spin"></i>
+                                    <span>正在查询 ${city} 天气...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                $('#message-container').append(loadingHtml);
+                $('#message-container').scrollTop($('#message-container')[0].scrollHeight);
+                
+                try {
+                    const response = await fetch(`/api/weather?city=${encodeURIComponent(city)}`);
+                    const data = await response.json();
+                    
+                    if (data.code === 200 && data.data && data.data.weather_data && data.data.location_info) {
+                        var weather = data.data.weather_data;
+                        var location = data.data.location_info;
+                        var forecast = weather.forecast ? weather.forecast.slice(0, 3) : []; // Get first 3 days
+                        
+                        var weatherIcon = 'fa-sun';
+                        if (weather.type && weather.type.includes('云')) weatherIcon = 'fa-cloud-sun';
+                        if (weather.type && weather.type.includes('阴')) weatherIcon = 'fa-cloud';
+                        if (weather.type && weather.type.includes('雨')) weatherIcon = 'fa-cloud-showers-heavy';
+                        if (weather.type && weather.type.includes('雪')) weatherIcon = 'fa-snowflake';
+                        
+                        // Extract numbers from high/low strings (e.g., "高温 2℃" -> "2℃")
+                        var cleanHigh = (weather.forecast && weather.forecast[0]) ? weather.forecast[0].high.replace('高温 ', '') : '--';
+                        var cleanLow = (weather.forecast && weather.forecast[0]) ? weather.forecast[0].low.replace('低温 ', '') : '--';
+
+                        var cardHtml = `
+                            <div class="bg-gradient-to-br from-blue-400 to-blue-600 text-white rounded-lg p-4 shadow-lg overflow-hidden relative min-w-[300px]">
+                                <div class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white opacity-10 rounded-full"></div>
+                                
+                                <div class="flex justify-between items-start mb-4 relative z-10">
+                                    <div>
+                                        <h2 class="text-2xl font-bold">${location.city || city}</h2>
+                                        <p class="text-blue-100 text-xs">${data.data.current_time || ''}</p>
+                                    </div>
+                                    <div class="text-4xl opacity-90">
+                                        <i class="fas ${weatherIcon}"></i>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex items-end mb-4 relative z-10">
+                                    <div class="text-5xl font-bold">${weather.wendu || '--'}°</div>
+                                    <div class="ml-3 mb-2 text-blue-100">
+                                        <p>${weather.type || '未知'}</p>
+                                        <p class="text-sm">${cleanLow} / ${cleanHigh}</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="grid grid-cols-2 gap-2 text-xs bg-white/20 rounded-lg p-2 mb-4 relative z-10">
+                                    <div class="flex items-center"><i class="fas fa-wind mr-2 opacity-70 w-4"></i> ${weather.fx || ''} ${weather.fl || ''}</div>
+                                    <div class="flex items-center"><i class="fas fa-tint mr-2 opacity-70 w-4"></i> 湿度 ${weather.shidu || ''}</div>
+                                    <div class="flex items-center"><i class="fas fa-leaf mr-2 opacity-70 w-4"></i> AQI ${weather.aqi || ''} ${weather.quality || ''}</div>
+                                    <div class="flex items-center"><i class="fas fa-mask mr-2 opacity-70 w-4"></i> PM2.5: ${weather.pm25 || ''}</div>
+                                </div>
+                                
+                                <div class="space-y-2 relative z-10">
+                                    ${forecast.map(day => `
+                                        <div class="flex justify-between items-center text-xs border-t border-white/20 pt-2">
+                                            <span class="w-1/4">${day.week || ''}</span>
+                                            <span class="w-1/4 text-center">${day.type || ''}</span>
+                                            <span class="w-1/2 text-right">${day.low ? day.low.replace('低温 ', '') : ''} ~ ${day.high ? day.high.replace('高温 ', '') : ''}</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                                
+                                <div class="mt-3 text-xs text-blue-100 italic text-center relative z-10 border-t border-white/10 pt-2">
+                                    "${weather.notice || '今天也是充满希望的一天'}"
+                                </div>
+                            </div>
+                        `;
+                        
+                        $(`#${weatherBubbleId}`).html(cardHtml).removeClass('p-4 bg-white border border-blue-100').addClass('p-0 bg-transparent border-0');
+                    } else {
+                        $(`#${weatherBubbleId}`).html(`
+                            <div class="text-red-500">
+                                <p class="font-bold"><i class="fas fa-exclamation-circle"></i> 查询失败</p>
+                                <p class="text-sm">${data.msg || '未找到该城市或服务不可用'}</p>
+                            </div>
+                        `);
+                    }
+                } catch (error) {
+                    console.error(error);
+                    $(`#${weatherBubbleId}`).html(`
+                        <div class="text-red-500">
+                            <p class="font-bold"><i class="fas fa-exclamation-circle"></i> 网络错误</p>
+                            <p class="text-sm">无法连接到天气服务</p>
+                        </div>
+                    `);
+                }
+            }
+
+            socket.on('room_users_update', function(data) {
+                console.log('Room users update:', data);
+                if (data.room === currentRoom) {
+                    $('#online-count').text(data.count);
+                    var $list = $('#room-users-list');
+                    $list.empty();
+                    data.users.forEach(function(user) {
+                        var isMe = user === nickname;
+                        var badge = isMe ? '<span class="ml-1 text-xs bg-primary text-white px-1 rounded">我</span>' : '';
+                        $list.append(`<div class="flex items-center"><div class="w-2 h-2 rounded-full bg-green-500 mr-2"></div>${user}${badge}</div>`);
+                    });
+                }
+            });
+
+            $('#toggle-users-btn').click(function() {
+                $('#room-users-list').toggleClass('hidden');
+                $(this).find('i').toggleClass('rotate-180');
+            });
+
+            $('#send-btn').click(async function() {
+                var text = $('#message-input').val().trim();
+                if (text) {
+                    socket.emit('message', {user: nickname, text: text, room: currentRoom});
+                    $('#message-input').val('');
+                }
+            });
+
+            $('#message-input').keypress(function(e) {
+                if (e.which == 13 && !e.shiftKey) {
+                    e.preventDefault();
+                    $('#send-btn').click();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

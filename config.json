@@ -1,0 +1,15 @@
+{
+    "servers": [
+        {"name": "本地服务器", "url": "http://127.0.0.1:5001"},
+        {"name": "公网服务器", "url": "http://s04ns7asupu3.ngrok.xiaomiqiu123.top"},
+        {"name": "测试服务器", "url": "http://192.168.1.100:5000"}
+    ],
+    "rooms": [
+        {"id": "default_room", "name": "默认群聊"},
+        {"id": "tech_room", "name": "技术交流"},
+        {"id": "music_room", "name": "音乐分享"},
+        {"id": "movie_room", "name": "电影讨论"},
+        {"id": "news_room", "name": "新闻资讯"},
+        {"id": "random_room", "name": "闲聊灌水"}
+    ]
+}
