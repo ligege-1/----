@@ -1,5 +1,6 @@
 import json
 import requests
+import random
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, Response, stream_with_context
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from flask_cors import CORS
@@ -126,49 +127,58 @@ def search_image():
 
 @app.route('/api/music', methods=['GET'])
 def get_music():
-    # Fallback data in case API fails
-    fallback_data = {
-        "code": 200,
-        "msg": "API Error - Using Fallback",
-        "data": {
-            "name": "Always With Me (Fallback)",
-            "singer": "Spirited Away",
-            "image": "https://p1.music.126.net/Bn5Gv69wP7HhZ-4B69Q5eA==/109951166366139133.jpg",
-            "url": "http://music.163.com/song/media/outer/url?id=25842621.mp3"
+    # Local playlist to ensure stability and randomness
+    music_playlist = [
+        {
+            "name": "Synth Wave 01",
+            "singer": "SoundHelix",
+            "image": "https://picsum.photos/seed/music1/300/300",
+            "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
+        },
+        {
+            "name": "Electronic Vibes",
+            "singer": "SoundHelix",
+            "image": "https://picsum.photos/seed/music2/300/300",
+            "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3"
+        },
+        {
+            "name": "Chill Beats",
+            "singer": "SoundHelix",
+            "image": "https://picsum.photos/seed/music3/300/300",
+            "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3"
+        },
+        {
+            "name": "Piano Dreams",
+            "singer": "SoundHelix",
+            "image": "https://picsum.photos/seed/music4/300/300",
+            "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-12.mp3"
+        },
+        {
+            "name": "Upbeat Rhythm",
+            "singer": "SoundHelix",
+            "image": "https://picsum.photos/seed/music5/300/300",
+            "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-15.mp3"
         }
-    }
+    ]
 
     try:
-        url = "https://v2.xxapi.cn/api/randomkuwo"
-        headers = {
-            'User-Agent': 'xiaoxiaoapi/1.0.0'
-        }
+        # Pick a random song from the playlist
+        selected_music = random.choice(music_playlist)
         
-        # Retry logic
-        max_retries = 3
-        for i in range(max_retries):
-            try:
-                response = requests.get(url, headers=headers, timeout=5)
-                # Try to parse JSON
-                data = response.json()
-                
-                # Validate data structure slightly
-                if data.get('code') == 200 and data.get('data') and data['data'].get('url'):
-                    return jsonify(data)
-                else:
-                    print(f"Attempt {i+1}: Invalid data received: {data}")
-            except (json.JSONDecodeError, requests.RequestException) as e:
-                print(f"Attempt {i+1} failed: {e}")
-                if i == max_retries - 1:
-                    print("All retries failed, using fallback.")
-                    return jsonify(fallback_data)
-                continue
-        
-        return jsonify(fallback_data)
+        return jsonify({
+            "code": 200,
+            "msg": "Success",
+            "data": selected_music
+        })
 
     except Exception as e:
         print(f"Unexpected error in music API: {e}")
-        return jsonify(fallback_data)
+        # Fallback to the first song if something goes wrong
+        return jsonify({
+            "code": 200,
+            "msg": "Fallback",
+            "data": music_playlist[0]
+        })
 
 @app.route('/api/news', methods=['GET'])
 def get_news():
