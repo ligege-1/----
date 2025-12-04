@@ -1,6 +1,8 @@
 import json
 import requests
 import random
+import sqlite3
+import hashlib
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, Response, stream_with_context
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from flask_cors import CORS
@@ -45,6 +47,104 @@ client = OpenAI(
 # Store connected users: {session_id: {'username': username, 'room': room_id}}
 connected_users = {}
 
+# Database Configuration
+DB_NAME = 'users.db'
+
+def init_db():
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute('''CREATE TABLE IF NOT EXISTS users
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      username TEXT UNIQUE NOT NULL,
+                      password TEXT NOT NULL,
+                      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+        
+        c.execute('''CREATE TABLE IF NOT EXISTS messages
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      room_id TEXT NOT NULL,
+                      sender TEXT NOT NULL,
+                      content TEXT NOT NULL,
+                      msg_type TEXT DEFAULT 'text',
+                      timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+        conn.commit()
+        conn.close()
+        print("Database initialized successfully.")
+    except Exception as e:
+        print(f"Database initialization failed: {e}")
+
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def register_user_db(username, password):
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute("INSERT INTO users (username, password) VALUES (?, ?)",
+                  (username, hash_password(password)))
+        conn.commit()
+        conn.close()
+        return True, "注册成功"
+    except sqlite3.IntegrityError:
+        return False, "用户名已存在"
+    except Exception as e:
+        return False, f"注册失败: {str(e)}"
+
+def verify_user_db(username, password):
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute("SELECT password FROM users WHERE username = ?", (username,))
+        result = c.fetchone()
+        conn.close()
+        if result and result[0] == hash_password(password):
+            return True
+        return False
+    except Exception as e:
+        print(f"Login verification error: {e}")
+        return False
+
+def save_message_db(room_id, sender, content, msg_type='text'):
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute("INSERT INTO messages (room_id, sender, content, msg_type) VALUES (?, ?, ?, ?)",
+                  (room_id, sender, content, msg_type))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Error saving message: {e}")
+
+def get_history_db(room_id, limit=50, before_id=None):
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        
+        if before_id:
+            c.execute("SELECT * FROM messages WHERE room_id = ? AND id < ? ORDER BY id DESC LIMIT ?", (room_id, before_id, limit))
+        else:
+            c.execute("SELECT * FROM messages WHERE room_id = ? ORDER BY id DESC LIMIT ?", (room_id, limit))
+            
+        rows = c.fetchall()
+        conn.close()
+        
+        messages = []
+        for row in reversed(rows): # Reverse to show oldest first
+            messages.append({
+                'id': row['id'],
+                'sender': row['sender'],
+                'content': row['content'],
+                'msg_type': row['msg_type'],
+                'timestamp': row['timestamp']
+            })
+        return messages
+    except Exception as e:
+        print(f"Error getting history: {e}")
+        return []
+
+
+
 def load_config():
     try:
         with open('config.json', 'r', encoding='utf-8') as f:
@@ -54,6 +154,7 @@ def load_config():
         return {"servers": []}
 
 @app.route('/')
+@app.route('/login')
 def login():
     return render_template('login.html')
 
@@ -81,6 +182,45 @@ def check_nickname():
         return jsonify({"available": False, "message": "Nickname already taken"})
     
     return jsonify({"available": True, "message": "Nickname is available"})
+
+@app.route('/api/register', methods=['POST'])
+def register():
+    data = request.json
+    username = data.get('username')
+    password = data.get('password')
+    
+    if not username or not password:
+        return jsonify({"success": False, "message": "用户名和密码不能为空"})
+        
+    success, message = register_user_db(username, password)
+    return jsonify({"success": success, "message": message})
+
+@app.route('/api/login', methods=['POST'])
+def login_api():
+    data = request.json
+    username = data.get('username')
+    password = data.get('password')
+    
+    if not username or not password:
+        return jsonify({"success": False, "message": "用户名和密码不能为空"})
+        
+    if verify_user_db(username, password):
+        session['username'] = username
+        return jsonify({"success": True, "message": "登录成功"})
+    else:
+        return jsonify({"success": False, "message": "用户名或密码错误"})
+
+@app.route('/api/history')
+def get_chat_history():
+    room_id = request.args.get('room_id')
+    limit = request.args.get('limit', 50, type=int)
+    before_id = request.args.get('before_id', type=int)
+
+    if not room_id:
+        return jsonify({"success": False, "message": "Room ID is required"})
+    
+    messages = get_history_db(room_id, limit, before_id)
+    return jsonify({"success": True, "messages": messages})
 
 @app.route('/api/ai_chat', methods=['POST'])
 def ai_chat():
@@ -387,6 +527,17 @@ def handle_leave(data):
 @socketio.on('message')
 def handle_message(data):
     room = data.get('room', 'default_room')
+    
+    # Save message to database
+    # Filter out system messages if they are just notifications (optional, but good practice)
+    # Here we save everything that has a user and text
+    user = data.get('user')
+    text = data.get('text')
+    msg_type = data.get('type', 'text')
+    
+    if user and text and user != '系统消息':
+        save_message_db(room, user, text, msg_type)
+        
     emit('message', data, room=room)
 
 @socketio.on('disconnect')
@@ -408,4 +559,5 @@ def handle_disconnect():
         print('Client disconnected')
 
 if __name__ == '__main__':
+    init_db()
     socketio.run(app, host='0.0.0.0', port=5001, debug=True)
